@@ -1,0 +1,67 @@
+[
+
+    {
+        "name": "manUserPrivateDetails",
+        "policy": "OR('ManufacturerMSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "distUserPrivateDetails",
+        "policy": "OR('DistributorMSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "whol1UserPrivateDetails",
+        "policy": "OR('Wholesaler1MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "whol2UserPrivateDetails",
+        "policy": "OR('Wholesaler2MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "ret1UserPrivateDetails",
+        "policy": "OR('Retailer1MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "ret2UserPrivateDetails",
+        "policy": "OR('Retailer2MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "ret3UserPrivateDetails",
+        "policy": "OR('Retailer3MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "log1UserPrivateDetails",
+        "policy": "OR('Logistics1MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    },
+    {
+        "name": "log2UserPrivateDetails",
+        "policy": "OR('Logistics2MSP.member')",
+        "requiredPeerCount": 0,
+        "maxPeerCount": 3,
+        "blockToLive":0
+    }
+]
+   
