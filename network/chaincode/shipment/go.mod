@@ -1,4 +1,4 @@
-module github.com/hyperledger/fabric-samples/asset
+module github.com/hyperledger/fabric-samples/shipment
 
 go 1.21
 
