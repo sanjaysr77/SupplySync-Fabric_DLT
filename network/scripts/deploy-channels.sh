@@ -2,7 +2,7 @@
 
 # ============================================================================
 # CHANNEL DEPLOYMENT SCRIPT
-# Creates mychannel and joins orderer and both peers
+# Creates mychannel and joins orderer and all peers
 # ============================================================================
 
 set -e
@@ -100,7 +100,7 @@ joinPeer() {
 # Generate genesis block for mychannel
 echo -e "${YELLOW}Creating mychannel...${NC}"
 
-if ! FABRIC_CFG_PATH=${PWD}/configtx configtxgen -profile TwoOrgsChannel \
+if ! FABRIC_CFG_PATH=${PWD}/configtx configtxgen -profile ThreeOrgsChannel \
     -outputBlock ./channel-artifacts/mychannel.block \
     -channelID mychannel > /dev/null 2>&1; then
     error_exit "Failed to generate genesis block for mychannel"
@@ -111,18 +111,22 @@ joinOrderer "mychannel" || error_exit "Failed to join orderer to mychannel"
 
 sleep 2
 
-# Join buyer peer
+# Join retailer peer
 echo -e "${BLUE}Joining peers to mychannel...${NC}"
-setPeerEnv "buyer" "BuyerMSP" "7051"
-joinPeer "buyer" "mychannel" || error_exit "Failed to join buyer to mychannel"
+setPeerEnv "retailer" "RetailerMSP" "7051"
+joinPeer "retailer" "mychannel" || error_exit "Failed to join retailer to mychannel"
 
-# Join seller peer
-setPeerEnv "seller" "SellerMSP" "8051"
-joinPeer "seller" "mychannel" || error_exit "Failed to join seller to mychannel"
+# Join distributor peer
+setPeerEnv "distributor" "DistributorMSP" "8051"
+joinPeer "distributor" "mychannel" || error_exit "Failed to join distributor to mychannel"
+
+# Join producer peer
+setPeerEnv "producer" "ProducerMSP" "9051"
+joinPeer "producer" "mychannel" || error_exit "Failed to join producer to mychannel"
 
 echo ""
 echo -e "${GREEN}============================================================================${NC}"
-echo -e "${GREEN}✅ mychannel created and both peers joined!${NC}"
+echo -e "${GREEN}✅ mychannel created and all peers joined!${NC}"
 echo -e "${GREEN}============================================================================${NC}"
 echo ""
 echo "Waiting for Raft consensus to stabilize (10 seconds)..."

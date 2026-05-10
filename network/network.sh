@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Fabric Network Management Script
-# Simple 2-org network with Buyer and Seller
+# Simple 3-org network with Retailer, Distributor, and Producer
 #
 
 set -e
@@ -51,7 +51,7 @@ function printHelp() {
   echo "  1. ./network.sh all"
   echo "  2. cd gateway-app && node server.js"
   echo ""
-  echo "CouchDB UI: http://localhost:7984/_utils (admin/adminpw)"
+  echo "CouchDB UI: http://localhost:5984/_utils (admin/adminpw)"
   echo "Gateway API: http://localhost:3000"
   echo ""
 }
@@ -86,7 +86,7 @@ function createNetworkIfNeeded() {
 
 function initializeCADirectories() {
   infoln "Initializing CA directories..."
-  mkdir -p organizations/fabric-ca/{orderer,buyer,seller}
+  mkdir -p organizations/fabric-ca/{orderer,retailer,distributor,producer}
   infoln "CA directories initialized"
 }
 
@@ -143,8 +143,9 @@ function generateCryptoWithCA() {
   echo ""
 
   createOrdererOrgCerts                          || error_exit "Failed to create orderer certificates"
-  createPeerOrgCerts "buyer"  "7154" "buyer.example.com"  || error_exit "Failed to create buyer certificates"
-  createPeerOrgCerts "seller" "8054" "seller.example.com" || error_exit "Failed to create seller certificates"
+  createPeerOrgCerts "retailer"    "7154" "retailer.example.com"    || error_exit "Failed to create retailer certificates"
+  createPeerOrgCerts "distributor" "8054" "distributor.example.com" || error_exit "Failed to create distributor certificates"
+  createPeerOrgCerts "producer"    "9054" "producer.example.com"    || error_exit "Failed to create producer certificates"
 
   echo ""
   infoln "✅ All certificates generated"
@@ -157,8 +158,8 @@ function generateCrypto() {
   fi
 
   local CA_COUNT=$(docker ps | grep "ca\." | wc -l)
-  if [ $CA_COUNT -lt 3 ]; then
-    error_exit "Fabric CA servers not running (found $CA_COUNT, need 3). Cannot generate certificates."
+  if [ $CA_COUNT -lt 4 ]; then
+    error_exit "Fabric CA servers not running (found $CA_COUNT, need 4). Cannot generate certificates."
   fi
 
   generateCryptoWithCA
@@ -169,29 +170,13 @@ function generateCrypto() {
 # ============================================
 
 function startCouchDB() {
-  infoln "Starting CouchDB containers..."
-
-  createNetworkIfNeeded
-
-  if ! docker-compose -f docker/docker-compose-couch.yaml up -d --remove-orphans 2>&1; then
-    error_exit "Failed to start CouchDB"
-  fi
-
-  infoln "Waiting for CouchDB to be ready..."
-  sleep 10
-
-  local COUCHDB_COUNT=$(docker ps | grep "couchdb" | wc -l)
-  if [ $COUCHDB_COUNT -ne 2 ]; then
-    error_exit "Expected 2 CouchDB containers, found $COUCHDB_COUNT"
-  fi
-
-  infoln "✅ CouchDB started ($COUCHDB_COUNT containers)"
+  infoln "CouchDB is managed by docker-compose-network.yaml"
 }
 
 function startNetworkContainers() {
   infoln "Starting network (orderer and peers)..."
 
-  if ! docker-compose -f docker/docker-compose-couch.yaml -f docker/docker-compose-network.yaml up -d --remove-orphans 2>&1; then
+  if ! docker-compose -f docker/docker-compose-network.yaml up -d --remove-orphans 2>&1; then
     error_exit "Failed to start network"
   fi
 
@@ -200,16 +185,21 @@ function startNetworkContainers() {
 
   local ORDERER_COUNT=$(docker ps | grep "orderer\." | wc -l)
   local PEER_COUNT=$(docker ps | grep "peer0\." | wc -l)
+  local COUCHDB_COUNT=$(docker ps | grep "couchdb\." | wc -l)
 
   if [ $ORDERER_COUNT -ne 1 ]; then
     error_exit "Expected 1 orderer, found $ORDERER_COUNT"
   fi
 
-  if [ $PEER_COUNT -ne 2 ]; then
-    error_exit "Expected 2 peers, found $PEER_COUNT"
+  if [ $PEER_COUNT -ne 3 ]; then
+    error_exit "Expected 3 peers, found $PEER_COUNT"
   fi
 
-  infoln "✅ Network started ($ORDERER_COUNT orderer, $PEER_COUNT peers)"
+  if [ $COUCHDB_COUNT -ne 3 ]; then
+    error_exit "Expected 3 CouchDB containers, found $COUCHDB_COUNT"
+  fi
+
+  infoln "✅ Network started ($ORDERER_COUNT orderer, $PEER_COUNT peers, $COUCHDB_COUNT CouchDB)"
 }
 
 # ============================================
@@ -314,7 +304,7 @@ function networkStart() {
     docker-compose -f docker/docker-compose-ca.yaml start 2>/dev/null || true
   fi
 
-  docker-compose -f docker/docker-compose-couch.yaml -f docker/docker-compose-network.yaml start
+  docker-compose -f docker/docker-compose-network.yaml start
 
   infoln "✅ Network started with existing state"
 }
@@ -323,7 +313,7 @@ function networkStop() {
   infoln "Stopping network containers..."
 
   docker-compose -f docker/docker-compose-ca.yaml stop 2>/dev/null || true
-  docker-compose -f docker/docker-compose-couch.yaml -f docker/docker-compose-network.yaml stop
+  docker-compose -f docker/docker-compose-network.yaml stop
 
   infoln "✅ Network stopped (all data preserved)"
   infoln "Use './network.sh start' to resume"
@@ -332,7 +322,7 @@ function networkStop() {
 function networkDown() {
   infoln "Stopping and removing network containers..."
 
-  docker-compose -f docker/docker-compose-couch.yaml -f docker/docker-compose-network.yaml down --volumes --remove-orphans 2>/dev/null || true
+  docker-compose -f docker/docker-compose-network.yaml down --volumes --remove-orphans 2>/dev/null || true
 
   clearContainers
   removeUnwantedImages
@@ -350,7 +340,7 @@ function cleanAll() {
   infoln "Complete cleanup - removing ALL data..."
 
   docker-compose -f docker/docker-compose-ca.yaml down --volumes --remove-orphans 2>/dev/null || true
-  docker-compose -f docker/docker-compose-couch.yaml -f docker/docker-compose-network.yaml down --volumes --remove-orphans 2>/dev/null || true
+  docker-compose -f docker/docker-compose-network.yaml down --volumes --remove-orphans 2>/dev/null || true
 
   clearContainers
   removeUnwantedImages
@@ -390,8 +380,9 @@ function showNetworkStatus() {
   infoln "  CouchDB:     $COUCHDB"
   echo ""
   infoln "CouchDB UI:"
-  infoln "  Buyer:   http://localhost:7984/_utils"
-  infoln "  Seller:  http://localhost:8984/_utils"
+  infoln "  Retailer:    http://localhost:5984/_utils"
+  infoln "  Distributor: http://localhost:6984/_utils"
+  infoln "  Producer:    http://localhost:7984/_utils"
   echo ""
 
   if [ "$mode" == "infrastructure" ]; then
@@ -404,7 +395,7 @@ function showNetworkStatus() {
     echo ""
     infoln "  Channel:    mychannel"
     infoln "  Chaincode:  asset"
-    infoln "  Orgs:       Buyer + Seller"
+    infoln "  Orgs:       Retailer + Distributor + Producer"
     echo ""
     infoln "Start the gateway:"
     infoln "  cd gateway-app && node server.js"

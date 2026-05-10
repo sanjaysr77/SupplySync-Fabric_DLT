@@ -6,7 +6,7 @@ peer:
   id: peer0
   
   # Network ID
-  networkId: trusflow
+  networkId: dpp-supply-chain
   
   # Listen address - overridden by CORE_PEER_LISTENADDRESS
   listenAddress: 0.0.0.0:7051
@@ -130,7 +130,7 @@ peer:
   mspConfigPath: msp
   
   # Local MSP ID - overridden by CORE_PEER_LOCALMSPID
-  localMspId: SampleOrg
+  localMspId: RetailerMSP
   
   # Local MSP type
   localMspType: bccsp
