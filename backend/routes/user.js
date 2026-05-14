@@ -1,19 +1,22 @@
 'use strict';
 
 const { Router } = require('express');
-const { protect } = require('../middleware/auth');
+const {
+  getProfile,
+  updateProfile,
+  listUsers,
+  getUserById,
+  deleteUser,
+} = require('../controllers/userController');
+const { protect, requireRole } = require('../middleware/auth');
 
 const router = Router();
 
-router.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'User routes (Phase 1)',
-  });
-});
-
-router.get('/me', protect, (req, res) => {
-  res.json({ success: true, user: req.user });
-});
+router.get('/profile', protect, getProfile);
+router.get('/me', protect, getProfile);
+router.put('/profile', protect, updateProfile);
+router.get('/list', protect, requireRole('admin'), listUsers);
+router.get('/:id', protect, getUserById);
+router.delete('/:id', protect, requireRole('admin'), deleteUser);
 
 module.exports = router;

@@ -43,6 +43,7 @@ const PEER_ORGS = [
     mspId: 'RetailerMSP',
     peerId: 'peer0.retailer.example.com',
     peerAddress: 'peer0.retailer.example.com:7051',
+    hostPort: 7051,
   },
   {
     ccpOrgKey: 'Distributor',
@@ -50,6 +51,7 @@ const PEER_ORGS = [
     mspId: 'DistributorMSP',
     peerId: 'peer0.distributor.example.com',
     peerAddress: 'peer0.distributor.example.com:8051',
+    hostPort: 8051,
   },
   {
     ccpOrgKey: 'Producer',
@@ -57,6 +59,7 @@ const PEER_ORGS = [
     mspId: 'ProducerMSP',
     peerId: 'peer0.producer.example.com',
     peerAddress: 'peer0.producer.example.com:9051',
+    hostPort: 9051,
   },
 ];
 
@@ -91,12 +94,24 @@ const ORDERER_TLS_CA_CERT = path.join(
   'tlsca.example.com-cert.pem'
 );
 
+/**
+ * When true (default): gRPC uses localhost ports published by Docker (same as network/scripts).
+ * Set FABRIC_USE_LOCALHOST_GRPC=false if Node runs on fabric_network with *.example.com DNS.
+ */
+const FABRIC_USE_LOCALHOST_GRPC = process.env.FABRIC_USE_LOCALHOST_GRPC !== 'false';
+
 function getOrdererGrpcUrl() {
+  if (FABRIC_USE_LOCALHOST_GRPC) {
+    return `grpcs://localhost:${ORDERER_ENDPOINT.port}`;
+  }
   return `grpcs://${ORDERER_ENDPOINT.host}:${ORDERER_ENDPOINT.port}`;
 }
 
-function peerGrpcUrl(peerAddress) {
-  return `grpcs://${peerAddress}`;
+function peerGrpcUrl(org) {
+  if (FABRIC_USE_LOCALHOST_GRPC) {
+    return `grpcs://localhost:${org.hostPort}`;
+  }
+  return `grpcs://${org.peerAddress}`;
 }
 
 /**
@@ -111,7 +126,7 @@ function getConnectionProfile(opts = {}) {
   for (const o of PEER_ORGS) {
     const { peerTlsCaCert } = orgCertificatePaths(o.slug);
     peers[o.peerId] = {
-      url: peerGrpcUrl(o.peerAddress),
+      url: peerGrpcUrl(o),
       grpcOptions: {
         'ssl-target-name-override': o.peerId,
         hostnameOverride: o.peerId,
@@ -219,7 +234,10 @@ async function connectGatewayForOrg(slug, gatewayOpts = {}) {
   await gateway.connect(getConnectionProfile({ clientOrganization: org.ccpOrgKey }), {
     wallet,
     identity: 'admin',
-    discovery: { enabled: true, asLocalhost: false },
+    discovery: {
+      enabled: process.env.FABRIC_DISCOVERY_ENABLED !== 'false',
+      asLocalhost: process.env.FABRIC_DISCOVERY_AS_LOCALHOST !== 'false',
+    },
     ...gatewayOpts,
   });
   return gateway;
