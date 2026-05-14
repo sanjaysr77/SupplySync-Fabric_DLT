@@ -1,44 +1,30 @@
 'use strict';
 
 /**
- * Hyperledger Fabric connection settings aligned with:
- * - network/configtx/configtx.yaml — profile ThreeOrgsChannel (Application orgs: Retailer, Distributor, Producer; OrdererMSP; orderer.example.com:7050)
- * - network/docker/docker-compose-network.yaml — peer listen ports on host
- * - network/scripts/deploy-channels.sh — channel mychannel, configtxgen -profile ThreeOrgsChannel
- * - network/scripts/deploy-chaincodes.sh — chaincode names, version, endorsement policy
+ * hyperledger-fabric-trial — connection to the repo `network/` stack
+ * (configtx ThreeOrgsChannel, channel scripts, docker-compose peers/orderer).
  */
 
 const path = require('path');
 const fs = require('fs').promises;
 const { Gateway, Wallets } = require('fabric-network');
 
-/** Absolute path to the `network/` directory (contains organizations/, channel-artifacts/, scripts). */
-const NETWORK_ROOT = path.resolve(__dirname, '../../network');
-
-/**
- * configtx.yaml → Profiles → ThreeOrgsChannel (channel creation uses this profile).
- * Application organization order matches the YAML list: Retailer, Distributor, Producer.
- */
-const CONFIGTX_PROFILE = 'ThreeOrgsChannel';
+/** Parent of `backend/` (repo root), then `network/` — i.e. `../network` relative to `backend/`. */
+const BACKEND_ROOT = path.resolve(__dirname, '..');
+const NETWORK_ROOT = path.resolve(BACKEND_ROOT, '..', 'network');
 
 const ORDERER_MSP_ID = 'OrdererMSP';
 
-/** configtx.yaml Orderer → OrdererDefaults → Addresses */
+/** Orderer gRPC (configtx Orderer.Addresses). */
 const ORDERER_ENDPOINT = {
   host: 'orderer.example.com',
   port: 7050,
 };
 
 const CHANNEL = {
-  /** Channel ID (scripts/deploy-channels.sh, deploy-chaincodes.sh) */
-  id: 'mychannel',
-  configtxProfile: CONFIGTX_PROFILE,
+  id: process.env.FABRIC_CHANNEL_ID || 'mychannel',
 };
 
-/**
- * Chaincode lifecycle as deployed by network/scripts/deploy-chaincodes.sh
- * (network.sh deploycc).
- */
 const CHAINCODE = {
   names: ['purchaseorder', 'shipment', 'dppcontract'],
   version: '1.0',
@@ -47,9 +33,8 @@ const CHAINCODE = {
 };
 
 /**
- * Peer org definitions: MSP Name / ID from configtx.yaml (&Retailer, &Distributor, &Producer).
- * Host ports from docker-compose-network.yaml published ports.
- * gRPC TLS server name from CORE_PEER_ADDRESS in compose (must match ssl-target-name-override when using localhost).
+ * Three application orgs. `peerAddress` is hostname:port as used in CORE_PEER_ADDRESS (Docker network).
+ * Resolve these hostnames from your app host (e.g. /etc/hosts → 127.0.0.1) when not running on fabric_network.
  */
 const PEER_ORGS = [
   {
@@ -57,21 +42,21 @@ const PEER_ORGS = [
     slug: 'retailer',
     mspId: 'RetailerMSP',
     peerId: 'peer0.retailer.example.com',
-    hostPort: 7051,
+    peerAddress: 'peer0.retailer.example.com:7051',
   },
   {
     ccpOrgKey: 'Distributor',
     slug: 'distributor',
     mspId: 'DistributorMSP',
     peerId: 'peer0.distributor.example.com',
-    hostPort: 8051,
+    peerAddress: 'peer0.distributor.example.com:8051',
   },
   {
     ccpOrgKey: 'Producer',
     slug: 'producer',
     mspId: 'ProducerMSP',
     peerId: 'peer0.producer.example.com',
-    hostPort: 9051,
+    peerAddress: 'peer0.producer.example.com:9051',
   },
 ];
 
@@ -80,14 +65,13 @@ function peerDomain(slug) {
 }
 
 /**
- * Certificate paths under NETWORK_ROOT (generated crypto layout).
- * MSPDir in configtx for each peer org: organizations/peerOrganizations/<domain>/msp
+ * Certificate paths under NETWORK_ROOT.
+ * Org MSP (configtx MSPDir): organizations/peerOrganizations/<domain>/msp
  */
 function orgCertificatePaths(slug) {
   const domain = peerDomain(slug);
   const peerOrgBase = path.join(NETWORK_ROOT, 'organizations', 'peerOrganizations', domain);
   return {
-    /** configtx MSPDir equivalent (org MSP) */
     orgMspDir: path.join(peerOrgBase, 'msp'),
     adminMspDir: path.join(peerOrgBase, 'users', `Admin@${domain}`, 'msp'),
     peerHomeDir: path.join(peerOrgBase, 'peers', `peer0.${domain}`),
@@ -107,19 +91,18 @@ const ORDERER_TLS_CA_CERT = path.join(
   'tlsca.example.com-cert.pem'
 );
 
-/** Same host mapping as network/scripts/deploy-channels.sh and deploy-chaincodes.sh (localhost). */
 function getOrdererGrpcUrl() {
-  return `grpcs://localhost:${ORDERER_ENDPOINT.port}`;
+  return `grpcs://${ORDERER_ENDPOINT.host}:${ORDERER_ENDPOINT.port}`;
 }
 
-function getPeerGrpcUrl(hostPort) {
-  return `grpcs://localhost:${hostPort}`;
+function peerGrpcUrl(peerAddress) {
+  return `grpcs://${peerAddress}`;
 }
 
 /**
- * fabric-network / fabric-common connection profile (Common Connection Profile style).
+ * Common Connection Profile for fabric-network Gateway (peers, orderer, channel).
  * @param {object} [opts]
- * @param {string} [opts.clientOrganization] — CCP organizations key (default Retailer)
+ * @param {string} [opts.clientOrganization] — CCP org key (default Retailer)
  */
 function getConnectionProfile(opts = {}) {
   const clientOrganization = opts.clientOrganization || 'Retailer';
@@ -128,7 +111,7 @@ function getConnectionProfile(opts = {}) {
   for (const o of PEER_ORGS) {
     const { peerTlsCaCert } = orgCertificatePaths(o.slug);
     peers[o.peerId] = {
-      url: getPeerGrpcUrl(o.hostPort),
+      url: peerGrpcUrl(o.peerAddress),
       grpcOptions: {
         'ssl-target-name-override': o.peerId,
         hostnameOverride: o.peerId,
@@ -201,9 +184,9 @@ async function readAdminCertificatePem(adminMspDir) {
 }
 
 /**
- * In-memory wallet with one identity: Admin@<org>.example.com for the given slug.
+ * In-memory wallet with Admin@<org>.example.com for the given slug.
  * @param {'retailer'|'distributor'|'producer'} slug
- * @param {string} [label] — wallet label (default: admin)
+ * @param {string} [label]
  */
 async function buildOrgAdminWallet(slug, label = 'admin') {
   const org = PEER_ORGS.find((o) => o.slug === slug);
@@ -223,9 +206,8 @@ async function buildOrgAdminWallet(slug, label = 'admin') {
 }
 
 /**
- * Connect Gateway using this repo's CCP and an org Admin identity.
  * @param {'retailer'|'distributor'|'producer'} slug
- * @param {import('fabric-network').GatewayOptions} [gatewayOpts] — overrides (e.g. discovery)
+ * @param {import('fabric-network').GatewayOptions} [gatewayOpts]
  */
 async function connectGatewayForOrg(slug, gatewayOpts = {}) {
   const org = PEER_ORGS.find((o) => o.slug === slug);
@@ -237,7 +219,7 @@ async function connectGatewayForOrg(slug, gatewayOpts = {}) {
   await gateway.connect(getConnectionProfile({ clientOrganization: org.ccpOrgKey }), {
     wallet,
     identity: 'admin',
-    discovery: { enabled: true, asLocalhost: true },
+    discovery: { enabled: true, asLocalhost: false },
     ...gatewayOpts,
   });
   return gateway;
@@ -245,13 +227,11 @@ async function connectGatewayForOrg(slug, gatewayOpts = {}) {
 
 module.exports = {
   NETWORK_ROOT,
-  CONFIGTX_PROFILE,
   ORDERER_MSP_ID,
   ORDERER_ENDPOINT,
   ORDERER_TLS_CA_CERT,
   CHANNEL,
   CHAINCODE,
-  /** Ordered as in configtx ThreeOrgsChannel Application Organizations */
   PEER_ORGS,
   peerDomain,
   orgCertificatePaths,
