@@ -5,10 +5,14 @@ import api from '../services/api';
 
 export function Users() {
   const [users, setUsers] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showOrgModal, setShowOrgModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedOrgId, setSelectedOrgId] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,6 +21,7 @@ export function Users() {
 
   useEffect(() => {
     fetchUsers();
+    fetchOrganizations();
   }, []);
 
   const fetchUsers = async () => {
@@ -31,6 +36,15 @@ export function Users() {
     }
   };
 
+  const fetchOrganizations = async () => {
+    try {
+      const response = await api.get('/admin/organizations');
+      setOrganizations(response.data.organizations || []);
+    } catch (err) {
+      console.error('Failed to fetch organizations:', err);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -42,8 +56,8 @@ export function Users() {
     setSuccess('');
 
     try {
-      await api.post('/auth/register', formData);
-      setSuccess('User created successfully! Registration email sent.');
+      await api.post('/auth/create-user', formData);
+      setSuccess('User created successfully with temporary password: TempPassword123!');
       setFormData({ name: '', email: '', role: 'user' });
       setShowForm(false);
       fetchUsers();
@@ -61,6 +75,27 @@ export function Users() {
       fetchUsers();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete user');
+    }
+  };
+
+  const handleAssignOrganization = async () => {
+    if (!selectedUserId || !selectedOrgId) {
+      setError('Please select both user and organization');
+      return;
+    }
+
+    try {
+      await api.post('/user/assign-organization', {
+        userId: selectedUserId,
+        organizationId: selectedOrgId,
+      });
+      setSuccess('Organization assigned successfully');
+      setShowOrgModal(false);
+      setSelectedUserId(null);
+      setSelectedOrgId('');
+      fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to assign organization');
     }
   };
 
@@ -146,6 +181,7 @@ export function Users() {
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Name</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Email</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Role</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Organization</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
                     </tr>
@@ -160,6 +196,9 @@ export function Users() {
                             {user.role}
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {user.organization ? user.organization.name : 'Not assigned'}
+                        </td>
                         <td className="py-3 px-4">
                           <span
                             className={`px-3 py-1 rounded-full text-sm capitalize ${
@@ -171,7 +210,17 @@ export function Users() {
                             {user.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUserId(user._id);
+                              setShowOrgModal(true);
+                            }}
+                          >
+                            Assign Org
+                          </Button>
                           <Button
                             variant="danger"
                             size="sm"
@@ -189,6 +238,53 @@ export function Users() {
           </Card>
         </div>
       </div>
+
+      {showOrgModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-96">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Assign Organization</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Organization
+                </label>
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select an organization</option>
+                  {organizations.map((org) => (
+                    <option key={org._id} value={org._id}>
+                      {org.name} ({org.domain})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  onClick={handleAssignOrganization}
+                  className="flex-1"
+                >
+                  Assign
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowOrgModal(false);
+                    setSelectedUserId(null);
+                    setSelectedOrgId('');
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </MainLayout>
   );
 }

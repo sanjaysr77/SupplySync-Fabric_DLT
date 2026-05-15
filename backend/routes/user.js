@@ -1,5 +1,3 @@
-'use strict';
-
 const { Router } = require('express');
 const {
   getProfile,
@@ -7,6 +5,7 @@ const {
   listUsers,
   getUserById,
   deleteUser,
+  assignOrganization,
 } = require('../controllers/userController');
 const { protect, requireRole } = require('../middleware/auth');
 
@@ -18,5 +17,6 @@ router.put('/profile', protect, updateProfile);
 router.get('/list', protect, requireRole('admin'), listUsers);
 router.get('/:id', protect, getUserById);
 router.delete('/:id', protect, requireRole('admin'), deleteUser);
+router.post('/assign-organization', protect, requireRole('admin'), assignOrganization);
 
 module.exports = router;

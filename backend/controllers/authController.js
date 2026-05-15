@@ -2,6 +2,7 @@
 
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 
@@ -19,7 +20,8 @@ exports.login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
@@ -137,5 +139,44 @@ exports.completeRegistration = async (req, res) => {
     return res.json({ success: true, token: jwtToken, user: safe });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message || 'Registration completion failed' });
+  }
+};
+
+exports.createUserAsAdmin = async (req, res) => {
+  try {
+    const { name, email, role, organization } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'name and email are required' });
+    }
+    const exists = await User.findOne({ email: email.toLowerCase().trim() });
+    if (exists) {
+      return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+    if (organization) {
+      if (!mongoose.Types.ObjectId.isValid(organization)) {
+        return res.status(400).json({ success: false, message: 'Invalid organization id' });
+      }
+      const org = await Organization.findById(organization);
+      if (!org) {
+        return res.status(400).json({ success: false, message: 'Organization not found' });
+      }
+    }
+    const tempPassword = 'TempPassword123!';
+    const user = new User({
+      name,
+      email: email.toLowerCase().trim(),
+      password: tempPassword,
+      role: role || 'user',
+      organization: organization || null,
+      status: 'active',
+    });
+    await user.save();
+    const safe = await User.findById(user._id).populate('organization', 'name mspId domain status');
+    return res.status(201).json({ success: true, user: safe, message: 'User created with temporary password: TempPassword123!' });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+    return res.status(400).json({ success: false, message: err.message || 'User creation failed' });
   }
 };

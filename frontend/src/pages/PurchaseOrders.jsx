@@ -17,9 +17,11 @@ export function PurchaseOrders() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
     poId: '',
-    buyer: '',
-    seller: '',
-    items: [{ sku: '', description: '', quantity: 0, unitPrice: 0 }],
+    productId: '',
+    quantity: 0,
+    requestedDeliveryDate: '',
+    linkedRetailerPOId: '',
+    notes: '',
   });
 
   useEffect(() => {
@@ -29,16 +31,36 @@ export function PurchaseOrders() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
+      setError('');
+      
       const [posRes, orgsRes, productsRes] = await Promise.all([
-        api.get('/po/list'),
-        api.get('/org/organizations'),
-        api.get('/product/list'),
+        api.get('/po/list').catch(err => ({ error: 'PO list', details: err })),
+        api.get('/org/organizations').catch(err => ({ error: 'Organizations', details: err })),
+        api.get('/product/list').catch(err => ({ error: 'Products', details: err })),
       ]);
-      setPos(posRes.data.purchaseOrders || []);
-      setOrganizations(orgsRes.data.organizations || []);
-      setProducts(productsRes.data.products || []);
+      
+      if (posRes.error) {
+        setError(`Failed to fetch ${posRes.error}: ${posRes.details.response?.data?.message || posRes.details.message}`);
+        setPos([]);
+      } else {
+        setPos(posRes.data.purchaseOrders || []);
+      }
+      
+      if (orgsRes.error) {
+        setError(`Failed to fetch ${orgsRes.error}: ${orgsRes.details.response?.data?.message || orgsRes.details.message}`);
+        setOrganizations([]);
+      } else {
+        setOrganizations(orgsRes.data.organizations || []);
+      }
+      
+      if (productsRes.error) {
+        setError(`Failed to fetch ${productsRes.error}: ${productsRes.details.response?.data?.message || productsRes.details.message}`);
+        setProducts([]);
+      } else {
+        setProducts(productsRes.data.products || []);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch data');
+      setError(err.message || 'Failed to fetch data');
     } finally {
       setIsLoading(false);
     }
@@ -49,78 +71,49 @@ export function PurchaseOrders() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setFormData((prev) => ({ ...prev, items: newItems }));
-  };
-
-  const addItem = () => {
-    setFormData((prev) => ({
-      ...prev,
-      items: [...prev.items, { sku: '', description: '', quantity: 0, unitPrice: 0 }],
-    }));
-  };
-
-  const removeItem = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index),
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    if (!formData.poId || !formData.buyer || !formData.seller) {
+    if (!formData.poId || !formData.productId || !formData.quantity || !formData.requestedDeliveryDate) {
       setError('Please fill in all required fields');
       return;
     }
 
-    if (formData.items.length === 0) {
-      setError('Please add at least one item');
-      return;
-    }
-
     try {
-      const totalAmount = formData.items.reduce(
-        (sum, item) => sum + item.quantity * item.unitPrice,
-        0
-      );
-
       const payload = {
-        ...formData,
-        totalAmount,
+        poId: formData.poId,
+        productId: formData.productId,
+        quantity: formData.quantity,
+        requestedDeliveryDate: formData.requestedDeliveryDate,
+        linkedRetailerPOId: formData.linkedRetailerPOId || undefined,
+        notes: formData.notes || undefined,
       };
 
-      if (editingId) {
-        await api.put(`/po/${editingId}`, payload);
-        setSuccess('Purchase order updated successfully');
-      } else {
-        await api.post('/po/create', payload);
-        setSuccess('Purchase order created successfully');
-      }
+      await api.post('/po/create', payload);
+      setSuccess('Purchase order created successfully');
 
       setFormData({
         poId: '',
-        buyer: '',
-        seller: '',
-        items: [{ sku: '', description: '', quantity: 0, unitPrice: 0 }],
+        productId: '',
+        quantity: 0,
+        requestedDeliveryDate: '',
+        linkedRetailerPOId: '',
+        notes: '',
       });
       setShowForm(false);
       setEditingId(null);
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save purchase order');
+      setError(err.response?.data?.message || 'Failed to create purchase order');
     }
   };
 
   const handleApprovePO = async (poId) => {
     try {
       await api.put(`/po/${poId}/approve`);
-      setSuccess('Purchase order approved');
+      setSuccess('Purchase order approved successfully');
       fetchData();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to approve PO');
@@ -128,9 +121,12 @@ export function PurchaseOrders() {
   };
 
   const handleRejectPO = async (poId) => {
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+
     try {
-      await api.put(`/po/${poId}/reject`);
-      setSuccess('Purchase order rejected');
+      await api.put(`/po/${poId}/reject`, { reason });
+      setSuccess('Purchase order rejected successfully');
       fetchData();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to reject PO');
@@ -172,11 +168,9 @@ export function PurchaseOrders() {
 
           {showForm && (
             <Card className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                {editingId ? 'Edit Purchase Order' : 'Create New Purchase Order'}
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Purchase Order</h2>
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="PO ID"
                     type="text"
@@ -189,104 +183,65 @@ export function PurchaseOrders() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Buyer Organization
+                      Product
                     </label>
                     <select
-                      name="buyer"
-                      value={formData.buyer}
+                      name="productId"
+                      value={formData.productId}
                       onChange={handleChange}
                       required
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">Select buyer...</option>
-                      {organizations.map((org) => (
-                        <option key={org._id} value={org._id}>
-                          {org.name}
+                      <option value="">Select product...</option>
+                      {products.map((product) => (
+                        <option key={product._id} value={product._id}>
+                          {product.name}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Seller Organization
-                    </label>
-                    <select
-                      name="seller"
-                      value={formData.seller}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select seller...</option>
-                      {organizations.map((org) => (
-                        <option key={org._id} value={org._id}>
-                          {org.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                  <Input
+                    label="Quantity"
+                    type="number"
+                    name="quantity"
+                    value={formData.quantity}
+                    onChange={handleChange}
+                    required
+                    placeholder="100"
+                    min="1"
+                  />
 
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Items</h3>
-                    <Button variant="secondary" size="sm" onClick={addItem} type="button">
-                      Add Item
-                    </Button>
-                  </div>
+                  <Input
+                    label="Requested Delivery Date"
+                    type="date"
+                    name="requestedDeliveryDate"
+                    value={formData.requestedDeliveryDate}
+                    onChange={handleChange}
+                    required
+                  />
 
-                  <div className="space-y-4">
-                    {formData.items.map((item, index) => (
-                      <div key={index} className="border rounded-lg p-4 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                          <Input
-                            label="SKU"
-                            type="text"
-                            value={item.sku}
-                            onChange={(e) => handleItemChange(index, 'sku', e.target.value)}
-                            placeholder="SKU"
-                          />
-                          <Input
-                            label="Description"
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                            placeholder="Description"
-                          />
-                          <Input
-                            label="Quantity"
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
-                            placeholder="0"
-                          />
-                          <Input
-                            label="Unit Price"
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                            step="0.01"
-                          />
-                        </div>
-                        {formData.items.length > 1 && (
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => removeItem(index)}
-                            type="button"
-                          >
-                            Remove Item
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <Input
+                    label="Linked Retailer PO ID (if distributor)"
+                    type="text"
+                    name="linkedRetailerPOId"
+                    value={formData.linkedRetailerPOId}
+                    onChange={handleChange}
+                    placeholder="PO-001"
+                  />
+
+                  <Input
+                    label="Notes"
+                    type="text"
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleChange}
+                    placeholder="Additional notes..."
+                  />
                 </div>
 
                 <Button type="submit" variant="primary" className="w-full">
-                  {editingId ? 'Update PO' : 'Create PO'}
+                  Create PO
                 </Button>
               </form>
             </Card>
@@ -323,70 +278,43 @@ export function PurchaseOrders() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">PO ID</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Buyer</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Seller</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Total Amount</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Product</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Quantity</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Delivery Date</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredPos.map((po) => (
-                      <tr key={po._id} className="border-b hover:bg-gray-50">
+                      <tr key={po._id || po.poId} className="border-b hover:bg-gray-50">
                         <td className="py-3 px-4 text-gray-900 font-mono">{po.poId}</td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {po.buyer?.name || 'N/A'}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {po.seller?.name || 'N/A'}
-                        </td>
-                        <td className="py-3 px-4 text-gray-900">${po.totalAmount.toFixed(2)}</td>
+                        <td className="py-3 px-4 text-gray-600">{po.productId}</td>
+                        <td className="py-3 px-4 text-gray-600">{po.quantity}</td>
+                        <td className="py-3 px-4 text-gray-600">{po.requestedDeliveryDate}</td>
                         <td className="py-3 px-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-sm capitalize ${
-                              po.status === 'approved'
-                                ? 'bg-green-100 text-green-800'
-                                : po.status === 'rejected'
-                                ? 'bg-red-100 text-red-800'
-                                : po.status === 'submitted'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
-                            {po.status}
+                          <span className="px-3 py-1 rounded-full text-sm capitalize bg-blue-100 text-blue-800">
+                            {po.status || 'pending'}
                           </span>
                         </td>
                         <td className="py-3 px-4 space-x-2">
-                          {user?.role === 'approver' && po.status === 'submitted' && (
+                          {(po.status === 'PENDING_PRODUCER_RESPONSE' || po.status === 'pending') && (
                             <>
                               <Button
                                 variant="primary"
                                 size="sm"
-                                onClick={() => handleApprovePO(po._id)}
+                                onClick={() => handleApprovePO(po.poId)}
                               >
                                 Approve
                               </Button>
                               <Button
                                 variant="danger"
                                 size="sm"
-                                onClick={() => handleRejectPO(po._id)}
+                                onClick={() => handleRejectPO(po.poId)}
                               >
                                 Reject
                               </Button>
                             </>
-                          )}
-                          {po.status === 'draft' && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                setFormData(po);
-                                setEditingId(po._id);
-                                setShowForm(true);
-                              }}
-                            >
-                              Edit
-                            </Button>
                           )}
                         </td>
                       </tr>

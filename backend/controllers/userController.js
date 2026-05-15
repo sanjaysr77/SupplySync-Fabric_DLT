@@ -37,14 +37,24 @@ exports.updateProfile = async (req, res) => {
 
 exports.listUsers = async (req, res) => {
   try {
-    const orgFilter = req.query.organization || req.user.organization;
     const query = {};
-    if (orgFilter) {
-      if (!mongoose.Types.ObjectId.isValid(orgFilter)) {
-        return res.status(400).json({ success: false, message: 'Invalid organization filter' });
+    
+    // Admin users can see all users or filter by organization
+    if (req.user.role === 'admin') {
+      const orgFilter = req.query.organization;
+      if (orgFilter) {
+        if (!mongoose.Types.ObjectId.isValid(orgFilter)) {
+          return res.status(400).json({ success: false, message: 'Invalid organization filter' });
+        }
+        query.organization = orgFilter;
       }
-      query.organization = orgFilter;
+    } else {
+      // Non-admin users can only see users from their organization
+      if (req.user.organization) {
+        query.organization = req.user.organization;
+      }
     }
+    
     const users = await User.find(query).select('-password').populate('organization', 'name mspId domain');
     return res.json({ success: true, count: users.length, users });
   } catch (err) {
@@ -87,5 +97,32 @@ exports.deleteUser = async (req, res) => {
     return res.json({ success: true, message: 'User deactivated' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message || 'Could not delete user' });
+  }
+};
+
+exports.assignOrganization = async (req, res) => {
+  try {
+    const { userId, organizationId } = req.body;
+    if (!userId || !organizationId) {
+      return res.status(400).json({ success: false, message: 'userId and organizationId are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(organizationId)) {
+      return res.status(400).json({ success: false, message: 'Invalid userId or organizationId' });
+    }
+    const Organization = require('../models/Organization');
+    const org = await Organization.findById(organizationId);
+    if (!org) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    user.organization = organizationId;
+    await user.save();
+    const fresh = await User.findById(user._id).select('-password').populate('organization', 'name mspId domain status');
+    return res.json({ success: true, user: fresh });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Could not assign organization' });
   }
 };

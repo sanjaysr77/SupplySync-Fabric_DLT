@@ -7,41 +7,34 @@ import api from '../services/api';
 export function Shipments() {
   const { user } = useAuthStore();
   const [shipments, setShipments] = useState([]);
-  const [pos, setPos] = useState([]);
-  const [organizations, setOrganizations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedShipment, setSelectedShipment] = useState(null);
-  const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [formData, setFormData] = useState({
     shipmentId: '',
-    poId: '',
-    shipper: '',
-    receiver: '',
-    items: [{ sku: '', description: '', quantity: 0 }],
-    trackingNumber: '',
+    retailerPoId: '',
+    distributorPoId: '',
+    productId: '',
+    quantity: 0,
+    promisedRetailerDeliveryDate: '',
+    distributorDispatchDate: '',
+    expectedRetailerDeliveryDate: '',
   });
 
   useEffect(() => {
-    fetchData();
+    fetchShipments();
   }, []);
 
-  const fetchData = async () => {
+  const fetchShipments = async () => {
     try {
       setIsLoading(true);
-      const [shipmentsRes, posRes, orgsRes] = await Promise.all([
-        api.get('/shipment/list'),
-        api.get('/po/list'),
-        api.get('/org/organizations'),
-      ]);
-      setShipments(shipmentsRes.data.shipments || []);
-      setPos(posRes.data.purchaseOrders || []);
-      setOrganizations(orgsRes.data.organizations || []);
+      setError('');
+      const response = await api.get('/shipment/list');
+      setShipments(response.data.shipments || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch data');
+      setError(err.response?.data?.message || 'Failed to fetch shipments');
     } finally {
       setIsLoading(false);
     }
@@ -52,38 +45,22 @@ export function Shipments() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setFormData((prev) => ({ ...prev, items: newItems }));
-  };
-
-  const addItem = () => {
-    setFormData((prev) => ({
-      ...prev,
-      items: [...prev.items, { sku: '', description: '', quantity: 0 }],
-    }));
-  };
-
-  const removeItem = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index),
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    if (!formData.shipmentId || !formData.poId || !formData.shipper || !formData.receiver) {
+    if (
+      !formData.shipmentId ||
+      !formData.retailerPoId ||
+      !formData.distributorPoId ||
+      !formData.productId ||
+      !formData.quantity ||
+      !formData.promisedRetailerDeliveryDate ||
+      !formData.distributorDispatchDate ||
+      !formData.expectedRetailerDeliveryDate
+    ) {
       setError('Please fill in all required fields');
-      return;
-    }
-
-    if (formData.items.length === 0) {
-      setError('Please add at least one item');
       return;
     }
 
@@ -92,36 +69,29 @@ export function Shipments() {
       setSuccess('Shipment created successfully');
       setFormData({
         shipmentId: '',
-        poId: '',
-        shipper: '',
-        receiver: '',
-        items: [{ sku: '', description: '', quantity: 0 }],
-        trackingNumber: '',
+        retailerPoId: '',
+        distributorPoId: '',
+        productId: '',
+        quantity: 0,
+        promisedRetailerDeliveryDate: '',
+        distributorDispatchDate: '',
+        expectedRetailerDeliveryDate: '',
       });
       setShowForm(false);
-      fetchData();
+      fetchShipments();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create shipment');
     }
   };
 
-  const handleUpdateStatus = async (shipmentId, newStatus) => {
+  const handleMarkDelivered = async (shipmentId) => {
     try {
-      await api.put(`/shipment/${shipmentId}/status`, { status: newStatus });
-      setSuccess('Shipment status updated');
-      fetchData();
+      const today = new Date().toISOString().split('T')[0];
+      await api.put(`/shipment/${shipmentId}/status`, { actualDeliveryDate: today });
+      setSuccess('Shipment marked as delivered');
+      fetchShipments();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update shipment status');
-    }
-  };
-
-  const handleTrackShipment = async (shipmentId) => {
-    try {
-      const response = await api.get(`/shipment/${shipmentId}/track`);
-      setSelectedShipment(response.data.data);
-      setShowTrackingModal(true);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to track shipment');
+      setError(err.response?.data?.message || 'Failed to mark delivery');
     }
   };
 
@@ -138,17 +108,7 @@ export function Shipments() {
             <h1 className="text-4xl font-bold text-gray-900">Shipments</h1>
             <Button
               variant="primary"
-              onClick={() => {
-                setShowForm(!showForm);
-                setFormData({
-                  shipmentId: '',
-                  poId: '',
-                  shipper: '',
-                  receiver: '',
-                  items: [{ sku: '', description: '', quantity: 0 }],
-                  trackingNumber: '',
-                });
-              }}
+              onClick={() => setShowForm(!showForm)}
             >
               {showForm ? 'Cancel' : 'Create Shipment'}
             </Button>
@@ -178,128 +138,72 @@ export function Shipments() {
                   />
 
                   <Input
-                    label="Tracking Number"
+                    label="Retailer PO ID"
                     type="text"
-                    name="trackingNumber"
-                    value={formData.trackingNumber}
+                    name="retailerPoId"
+                    value={formData.retailerPoId}
                     onChange={handleChange}
-                    placeholder="TRK-001"
+                    required
+                    placeholder="PO-001"
                   />
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Purchase Order
-                    </label>
-                    <select
-                      name="poId"
-                      value={formData.poId}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select PO...</option>
-                      {pos.map((po) => (
-                        <option key={po._id} value={po._id}>
-                          {po.poId}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <Input
+                    label="Distributor PO ID"
+                    type="text"
+                    name="distributorPoId"
+                    value={formData.distributorPoId}
+                    onChange={handleChange}
+                    required
+                    placeholder="DIST-001"
+                  />
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Shipper Organization
-                    </label>
-                    <select
-                      name="shipper"
-                      value={formData.shipper}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select shipper...</option>
-                      {organizations.map((org) => (
-                        <option key={org._id} value={org._id}>
-                          {org.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <Input
+                    label="Product ID"
+                    type="text"
+                    name="productId"
+                    value={formData.productId}
+                    onChange={handleChange}
+                    required
+                    placeholder="Product ID"
+                  />
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Receiver Organization
-                    </label>
-                    <select
-                      name="receiver"
-                      value={formData.receiver}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select receiver...</option>
-                      {organizations.map((org) => (
-                        <option key={org._id} value={org._id}>
-                          {org.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                  <Input
+                    label="Quantity"
+                    type="number"
+                    name="quantity"
+                    value={formData.quantity}
+                    onChange={handleChange}
+                    required
+                    placeholder="100"
+                    min="1"
+                  />
 
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Items</h3>
-                    <Button variant="secondary" size="sm" onClick={addItem} type="button">
-                      Add Item
-                    </Button>
-                  </div>
+                  <Input
+                    label="Promised Retailer Delivery Date"
+                    type="date"
+                    name="promisedRetailerDeliveryDate"
+                    value={formData.promisedRetailerDeliveryDate}
+                    onChange={handleChange}
+                    required
+                  />
 
-                  <div className="space-y-4">
-                    {formData.items.map((item, index) => (
-                      <div key={index} className="border rounded-lg p-4 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <Input
-                            label="SKU"
-                            type="text"
-                            value={item.sku}
-                            onChange={(e) => handleItemChange(index, 'sku', e.target.value)}
-                            placeholder="SKU"
-                          />
-                          <Input
-                            label="Description"
-                            type="text"
-                            value={item.description}
-                            onChange={(e) =>
-                              handleItemChange(index, 'description', e.target.value)
-                            }
-                            placeholder="Description"
-                          />
-                          <Input
-                            label="Quantity"
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) =>
-                              handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)
-                            }
-                            placeholder="0"
-                          />
-                        </div>
-                        {formData.items.length > 1 && (
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => removeItem(index)}
-                            type="button"
-                          >
-                            Remove Item
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <Input
+                    label="Distributor Dispatch Date"
+                    type="date"
+                    name="distributorDispatchDate"
+                    value={formData.distributorDispatchDate}
+                    onChange={handleChange}
+                    required
+                  />
+
+                  <Input
+                    label="Expected Retailer Delivery Date"
+                    type="date"
+                    name="expectedRetailerDeliveryDate"
+                    value={formData.expectedRetailerDeliveryDate}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
 
                 <Button type="submit" variant="primary" className="w-full">
@@ -320,9 +224,9 @@ export function Shipments() {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
-                <option value="pending">Pending</option>
-                <option value="in-transit">In Transit</option>
-                <option value="delivered">Delivered</option>
+                <option value="CREATED">Created</option>
+                <option value="IN_TRANSIT">In Transit</option>
+                <option value="DELIVERED">Delivered</option>
               </select>
             </div>
           </Card>
@@ -337,72 +241,44 @@ export function Shipments() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">
-                        Shipment ID
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">
-                        Tracking #
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">
-                        Shipper
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">
-                        Receiver
-                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Shipment ID</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Retailer PO</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Distributor PO</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Product</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Quantity</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredShipments.map((shipment) => (
-                      <tr key={shipment._id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 text-gray-900 font-mono">
-                          {shipment.shipmentId}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">{shipment.trackingNumber}</td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {shipment.shipper?.name || 'N/A'}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {shipment.receiver?.name || 'N/A'}
-                        </td>
+                      <tr key={shipment.shipmentId} className="border-b hover:bg-gray-50">
+                        <td className="py-3 px-4 text-gray-900 font-mono">{shipment.shipmentId}</td>
+                        <td className="py-3 px-4 text-gray-600">{shipment.retailerPoId}</td>
+                        <td className="py-3 px-4 text-gray-600">{shipment.distributorPoId}</td>
+                        <td className="py-3 px-4 text-gray-600">{shipment.productId}</td>
+                        <td className="py-3 px-4 text-gray-600">{shipment.quantity}</td>
                         <td className="py-3 px-4">
                           <span
                             className={`px-3 py-1 rounded-full text-sm capitalize ${
-                              shipment.status === 'delivered'
+                              shipment.status === 'DELIVERED'
                                 ? 'bg-green-100 text-green-800'
-                                : shipment.status === 'in-transit'
+                                : shipment.status === 'IN_TRANSIT'
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-gray-100 text-gray-800'
                             }`}
                           >
-                            {shipment.status}
+                            {shipment.status || 'CREATED'}
                           </span>
                         </td>
-                        <td className="py-3 px-4 space-x-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleTrackShipment(shipment._id)}
-                          >
-                            Track
-                          </Button>
-                          {shipment.status === 'pending' && (
+                        <td className="py-3 px-4">
+                          {shipment.status !== 'DELIVERED' && user?.organization?.domain?.includes('retailer') && (
                             <Button
                               variant="primary"
                               size="sm"
-                              onClick={() => handleUpdateStatus(shipment._id, 'in-transit')}
+                              onClick={() => handleMarkDelivered(shipment.shipmentId)}
                             >
-                              Ship
-                            </Button>
-                          )}
-                          {shipment.status === 'in-transit' && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => handleUpdateStatus(shipment._id, 'delivered')}
-                            >
-                              Deliver
+                              Mark Delivered
                             </Button>
                           )}
                         </td>
@@ -413,71 +289,6 @@ export function Shipments() {
               </div>
             )}
           </Card>
-
-          {showTrackingModal && selectedShipment && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <Card className="max-w-md w-full mx-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold text-gray-900">Shipment Tracking</h2>
-                  <button
-                    onClick={() => setShowTrackingModal(false)}
-                    className="text-gray-500 hover:text-gray-700 text-2xl"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Shipment ID
-                    </label>
-                    <p className="text-gray-900 mt-1">{selectedShipment.shipmentId}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Tracking Number
-                    </label>
-                    <p className="text-gray-900 mt-1">{selectedShipment.trackingNumber}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                    <p className="text-gray-900 mt-1 capitalize">{selectedShipment.status}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Created At
-                    </label>
-                    <p className="text-gray-900 mt-1">
-                      {new Date(selectedShipment.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Items</label>
-                    <div className="mt-2 space-y-2">
-                      {selectedShipment.items?.map((item, idx) => (
-                        <div key={idx} className="text-sm text-gray-600">
-                          {item.sku} - {item.description} (Qty: {item.quantity})
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  variant="secondary"
-                  className="w-full mt-6"
-                  onClick={() => setShowTrackingModal(false)}
-                >
-                  Close
-                </Button>
-              </Card>
-            </div>
-          )}
         </div>
       </div>
     </MainLayout>

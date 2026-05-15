@@ -1,0 +1,261 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    PURCHASE ORDER (PO) WORKFLOW                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+COMPLETE SUPPLY CHAIN FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                              ┌─────────────────┐
+                              │    RETAILER     │
+                              │   (You Start)   │
+                              └────────┬────────┘
+                                       │
+                                       │ 1. Create PO
+                                       │    - PO ID
+                                       │    - Product
+                                       │    - Quantity
+                                       │    - Delivery Date
+                                       ↓
+                              ┌─────────────────┐
+                              │  PO CREATED     │
+                              │  Status: PENDING│
+                              │ (On Blockchain) │
+                              └────────┬────────┘
+                                       │
+                                       │ Blockchain Records:
+                                       │ - Timestamp
+                                       │ - All Details
+                                       │ - Immutable
+                                       ↓
+                              ┌─────────────────┐
+                              │  DISTRIBUTOR    │
+                              │  Receives PO    │
+                              └────────┬────────┘
+                                       │
+                                       │ 2. Create Linked PO
+                                       │    to Producer
+                                       │    (Same product/qty)
+                                       ↓
+                              ┌─────────────────┐
+                              │  PRODUCER       │
+                              │  Receives PO    │
+                              └────────┬────────┘
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    │                  │                  │
+                    │ 3a. APPROVE      │ 3b. REJECT       │
+                    │                  │                  │
+                    ↓                  ↓                  ↓
+            ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+            │  APPROVED    │   │  REJECTED    │   │  REJECTED    │
+            │  Status: OK  │   │  Status: NO  │   │  Reason: X   │
+            └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
+                   │                  │                  │
+                   │ Produce Goods    │ Notify           │ Notify
+                   │                  │ Distributor      │ Distributor
+                   │                  │                  │
+                   ↓                  ↓                  ↓
+            ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+            │  PRODUCER    │   │ DISTRIBUTOR  │   │ DISTRIBUTOR  │
+            │  Ships to    │   │ Creates New  │   │ Creates New  │
+            │ DISTRIBUTOR  │   │ PO with      │   │ PO with      │
+            │              │   │ Adjustments  │   │ Adjustments  │
+            └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
+                   │                  │                  │
+                   │ 4. Mark Dispatch │ (Repeat Flow)    │ (Repeat Flow)
+                   │    Date          │                  │
+                   ↓                  ↓                  ↓
+            ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+            │ DISTRIBUTOR  │   │   PRODUCER   │   │   PRODUCER   │
+            │ Marks        │   │   Approves   │   │   Approves   │
+            │ Dispatch     │   │   New PO     │   │   New PO     │
+            │ Status:      │   │              │   │              │
+            │ DISPATCHED   │   └──────┬───────┘   └──────┬───────┘
+            └──────┬───────┘          │                  │
+                   │                  │ (Continues...)   │ (Continues...)
+                   │ Ships to         │                  │
+                   │ RETAILER         │                  │
+                   ↓                  ↓                  ↓
+            ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+            │  RETAILER    │   │  DISTRIBUTOR │   │  DISTRIBUTOR │
+            │  Receives    │   │  Ships to    │   │  Ships to    │
+            │  Shipment    │   │  RETAILER    │   │  RETAILER    │
+            │              │   │              │   │              │
+            │ Status:      │   └──────┬───────┘   └──────┬───────┘
+            │ COMPLETED ✓  │          │                  │
+            └──────────────┘          ↓                  ↓
+                                 ┌──────────────┐   ┌──────────────┐
+                                 │  RETAILER    │   │  RETAILER    │
+                                 │  Receives    │   │  Receives    │
+                                 │  Shipment    │   │  Shipment    │
+                                 │              │   │              │
+                                 │ Status:      │   │ Status:      │
+                                 │ COMPLETED ✓  │   │ COMPLETED ✓  │
+                                 └──────────────┘   └──────────────┘
+
+
+QUICK REFERENCE - WHAT EACH PARTY DOES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RETAILER (You)
+├─ 1. Create PO
+│  └─ Go to /purchase-orders
+│  └─ Click "Create PO"
+│  └─ Fill: PO ID, Product, Quantity, Delivery Date
+│  └─ Click "Create PO"
+│
+├─ 2. Monitor Status
+│  └─ Check /purchase-orders
+│  └─ See PENDING → APPROVED → DISPATCHED → COMPLETED
+│
+└─ 3. Receive Shipment
+   └─ When status is DISPATCHED
+   └─ Receive goods from Distributor
+   └─ PO marked COMPLETED
+
+
+DISTRIBUTOR
+├─ 1. Receive Retailer PO
+│  └─ See in /purchase-orders
+│  └─ Status: PENDING
+│
+├─ 2. Create Linked PO to Producer
+│  └─ Click "Create PO"
+│  └─ Link to Retailer PO
+│  └─ Send to Producer
+│
+├─ 3. Receive from Producer
+│  └─ When Producer approves
+│  └─ Receive goods
+│
+├─ 4. Mark Dispatch
+│  └─ Click "Mark Dispatch"
+│  └─ Enter dispatch date
+│  └─ Ship to Retailer
+│
+└─ 5. Confirm Delivery
+   └─ Retailer receives
+   └─ PO marked COMPLETED
+
+
+PRODUCER
+├─ 1. Receive Distributor PO
+│  └─ See in /purchase-orders
+│  └─ Status: PENDING
+│
+├─ 2. Review & Decide
+│  └─ Option A: Click "Approve"
+│  └─ Option B: Click "Reject"
+│
+├─ 3. If Approved
+│  └─ Produce goods
+│  └─ Ship to Distributor
+│
+└─ 4. If Rejected
+   └─ Distributor creates new PO
+   └─ Process repeats
+
+
+STATUS FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PENDING
+  ↓
+  ├─→ APPROVED (Producer approved)
+  │     ↓
+  │     DISPATCHED (Distributor shipped)
+  │     ↓
+  │     COMPLETED (Retailer received) ✓
+  │
+  └─→ REJECTED (Producer rejected)
+        ↓
+        (Distributor creates new PO)
+        ↓
+        (Process repeats)
+
+
+BLOCKCHAIN RECORDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Every action is recorded on Hyperledger Fabric:
+
+✓ PO Creation
+  - Timestamp
+  - Creator
+  - All details
+  - Immutable
+
+✓ PO Approval/Rejection
+  - Timestamp
+  - Decision
+  - Reason (if rejected)
+  - Immutable
+
+✓ Dispatch Marking
+  - Timestamp
+  - Dispatch date
+  - Immutable
+
+✓ Complete Audit Trail
+  - All parties can verify
+  - Cannot be altered
+  - Compliance ready
+
+
+EXAMPLE TIMELINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2024-12-01 10:00 AM
+  Retailer creates PO-001
+  Status: PENDING
+  Blockchain: ✓ Recorded
+
+2024-12-01 10:30 AM
+  Distributor receives PO-001
+  Creates linked PO-DIST-001 to Producer
+  Status: PENDING
+  Blockchain: ✓ Recorded
+
+2024-12-01 11:00 AM
+  Producer receives PO-DIST-001
+  Reviews order
+  Status: PENDING
+  Blockchain: ✓ Recorded
+
+2024-12-01 11:30 AM
+  Producer approves PO-DIST-001
+  Status: APPROVED
+  Blockchain: ✓ Recorded
+
+2024-12-02 09:00 AM
+  Producer ships to Distributor
+  Distributor marks dispatch
+  Status: DISPATCHED
+  Blockchain: ✓ Recorded
+
+2024-12-03 02:00 PM
+  Distributor ships to Retailer
+  Retailer receives shipment
+  Status: COMPLETED ✓
+  Blockchain: ✓ Recorded
+
+
+QUICK START CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+□ Go to /purchase-orders
+□ Click "Create PO" button
+□ Fill in PO ID (e.g., PO-001)
+□ Select Product from dropdown
+□ Enter Quantity
+□ Enter Requested Delivery Date (YYYY-MM-DD)
+□ Add Notes (optional)
+□ Click "Create PO"
+□ See success message
+□ PO appears in list with PENDING status
+□ Wait for Distributor/Producer actions
+□ Monitor status updates
+□ Receive shipment when DISPATCHED
+□ PO marked COMPLETED ✓
+
+That's it! You've successfully raised a PO! 🎉
