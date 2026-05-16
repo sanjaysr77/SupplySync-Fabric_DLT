@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, Alert, Input } from '../components/common';
 import { MainLayout } from '../components/layout';
 import { useAuthStore } from '../store/authStore';
@@ -6,6 +7,7 @@ import api from '../services/api';
 
 export function PurchaseOrders() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [pos, setPos] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [products, setProducts] = useState([]);
@@ -287,35 +289,27 @@ export function PurchaseOrders() {
                   </thead>
                   <tbody>
                     {filteredPos.map((po) => (
-                      <tr key={po._id || po.poId} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 text-gray-900 font-mono">{po.poId}</td>
+                      <tr key={po._id || po.poId} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/purchase-orders/${po.poId}`)}>
+                        <td className="py-3 px-4 text-gray-900 font-mono font-semibold">{po.poId}</td>
                         <td className="py-3 px-4 text-gray-600">{po.productId}</td>
-                        <td className="py-3 px-4 text-gray-600">{po.quantity}</td>
+                        <td className="py-3 px-4 text-gray-600 font-semibold">{po.quantity}</td>
                         <td className="py-3 px-4 text-gray-600">{po.requestedDeliveryDate}</td>
                         <td className="py-3 px-4">
-                          <span className="px-3 py-1 rounded-full text-sm capitalize bg-blue-100 text-blue-800">
+                          <span className="px-3 py-1 rounded-full text-sm capitalize font-medium bg-blue-100 text-blue-800">
                             {po.status || 'pending'}
                           </span>
                         </td>
                         <td className="py-3 px-4 space-x-2">
-                          {(po.status === 'PENDING_PRODUCER_RESPONSE' || po.status === 'pending') && (
-                            <>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleApprovePO(po.poId)}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => handleRejectPO(po.poId)}
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/purchase-orders/${po.poId}`);
+                            }}
+                          >
+                            View Details
+                          </Button>
                         </td>
                       </tr>
                     ))}

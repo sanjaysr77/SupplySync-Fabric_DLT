@@ -8,4 +8,6 @@ module.exports = {
   PurchaseOrder: require('./PurchaseOrder'),
   Shipment: require('./Shipment'),
   DPPData: require('./DPPData'),
+  Inventory: require('./Inventory'),
+  InventoryTransaction: require('./InventoryTransaction'),
 };

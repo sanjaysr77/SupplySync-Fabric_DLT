@@ -38,6 +38,7 @@ app.use('/api/product', require('./routes/product'));
 app.use('/api/po', require('./routes/po'));
 app.use('/api/shipment', require('./routes/shipment'));
 app.use('/api/dpp', require('./routes/dpp'));
+app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/health', require('./routes/health'));
 
 app.use((req, res) => {

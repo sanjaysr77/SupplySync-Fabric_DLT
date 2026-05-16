@@ -8,9 +8,11 @@ import {
   Organizations,
   Products,
   PurchaseOrders,
+  PODetail,
   Shipments,
   DPP,
   Analytics,
+  Inventory,
 } from './pages';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
@@ -65,6 +67,22 @@ function App() {
           element={
             <ProtectedRoute>
               <PurchaseOrders />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/purchase-orders/:poId"
+          element={
+            <ProtectedRoute>
+              <PODetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/inventory"
+          element={
+            <ProtectedRoute>
+              <Inventory />
             </ProtectedRoute>
           }
         />

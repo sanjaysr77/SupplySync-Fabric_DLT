@@ -66,10 +66,10 @@ function resolveCreateArgs(body) {
 
 exports.createShipment = async (req, res) => {
   try {
-    if (req.org !== 'distributor') {
+    if (req.org !== 'distributor' && req.org !== 'producer') {
       return res.status(403).json({
         success: false,
-        message: 'Only distributor org users can create shipments on-chain',
+        message: 'Only distributor and producer org users can create shipments on-chain',
       });
     }
     const args = resolveCreateArgs(req.body);
@@ -80,7 +80,7 @@ exports.createShipment = async (req, res) => {
           'Provide chaincode fields: shipmentId, retailerPoId, distributorPoId, productId, quantity, promisedRetailerDeliveryDate, distributorDispatchDate, expectedRetailerDeliveryDate (YYYY-MM-DD); or shipmentId, poId (retailer PO), distributorPoId, items[0].productId|sku, items[0].quantity, and the three dates',
       });
     }
-    const buf = await withChaincodeContract('distributor', 'shipment', (contract) =>
+    const buf = await withChaincodeContract(req.org, 'shipment', (contract) =>
       contract.submitTransaction('CreateShipment', ...args)
     );
     return res.status(201).json({ success: true, shipment: parseFabricBuffer(buf) });

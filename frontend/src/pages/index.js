@@ -6,6 +6,8 @@ export { Users } from './Users';
 export { Organizations } from './Organizations';
 export { Products } from './Products';
 export { PurchaseOrders } from './PurchaseOrders';
+export { PODetail } from './PODetail';
 export { Shipments } from './Shipments';
 export { DPP } from './DPP';
 export { Analytics } from './Analytics';
+export { Inventory } from './Inventory';

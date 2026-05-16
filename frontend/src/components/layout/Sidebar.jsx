@@ -10,6 +10,7 @@ export function Sidebar() {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', roles: ['admin', 'user', 'approver'] },
     { path: '/products', label: 'Products', roles: ['admin', 'user', 'approver'] },
+    { path: '/inventory', label: 'Inventory', roles: ['admin', 'user', 'approver'] },
     { path: '/purchase-orders', label: 'Purchase Orders', roles: ['admin', 'user', 'approver'] },
     { path: '/shipments', label: 'Shipments', roles: ['admin', 'user', 'approver'] },
     { path: '/dpp', label: 'DPP Records', roles: ['admin', 'user', 'approver'] },

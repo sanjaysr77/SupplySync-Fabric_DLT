@@ -70,15 +70,24 @@ func getMSPID(stub shim.ChaincodeStubInterface) (string, error) {
 	return sid.Mspid, nil
 }
 
-func requireMSP(stub shim.ChaincodeStubInterface, expected string) error {
+func requireMSPOneOf(stub shim.ChaincodeStubInterface, allowed ...string) error {
 	mspID, err := getMSPID(stub)
 	if err != nil {
 		return err
 	}
-	if mspID != expected {
-		return fmt.Errorf("access denied: required %s, got %s", expected, mspID)
+	for _, exp := range allowed {
+		if mspID == exp {
+			return nil
+		}
 	}
-	return nil
+	allowedStr := ""
+	for i, a := range allowed {
+		if i > 0 {
+			allowedStr += ", "
+		}
+		allowedStr += a
+	}
+	return fmt.Errorf("access denied: required one of [%s], got %s", allowedStr, mspID)
 }
 
 func isISODate(v string) bool {
@@ -95,7 +104,7 @@ func (s *ShipmentChaincode) CreateShipment(stub shim.ChaincodeStubInterface, arg
 	if len(args) != 8 {
 		return shim.Error("Expecting 8 args: shipmentId, retailerPoId, distributorPoId, productId, quantity, promisedRetailerDeliveryDate, dispatchDate, expectedRetailerDeliveryDate")
 	}
-	if err := requireMSP(stub, "DistributorMSP"); err != nil {
+	if err := requireMSPOneOf(stub, "DistributorMSP", "ProducerMSP"); err != nil {
 		return shim.Error(err.Error())
 	}
 	for _, idx := range []int{5, 6, 7} {
@@ -138,7 +147,7 @@ func (s *ShipmentChaincode) MarkDeliveredByRetailer(stub shim.ChaincodeStubInter
 	if len(args) < 2 {
 		return shim.Error("Expecting at least 2 args: shipmentId, actualDeliveryDate, [deliveryProof]")
 	}
-	if err := requireMSP(stub, "RetailerMSP"); err != nil {
+	if err := requireMSPOneOf(stub, "RetailerMSP"); err != nil {
 		return shim.Error(err.Error())
 	}
 	if !isISODate(args[1]) {
