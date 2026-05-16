@@ -17,6 +17,10 @@ export function DPP() {
   const [formData, setFormData] = useState({
     productId: '',
     productName: '',
+    batchId: '',
+    originCountry: '',
+    manufactureDate: '',
+    expiryDate: '',
     manufacturerId: '',
     manufacturerName: '',
     certifications: [],
@@ -34,7 +38,10 @@ export function DPP() {
     try {
       setIsLoading(true);
       const [dppsRes, productsRes] = await Promise.all([
-        api.get('/dpp/list/all'),
+        api.get('/dpp/list/all').catch(err => {
+          console.error('DPP list error:', err);
+          return { data: { dpps: [] } };
+        }),
         api.get('/product/list'),
       ]);
       setDpps(dppsRes.data.dpps || []);
@@ -104,7 +111,7 @@ export function DPP() {
     setError('');
     setSuccess('');
 
-    if (!formData.productId || !formData.manufacturerName) {
+    if (!formData.productId || !formData.batchId || !formData.manufacturerName || !formData.originCountry || !formData.manufactureDate || !formData.expiryDate) {
       setError('Please fill in all required fields');
       return;
     }
@@ -115,6 +122,10 @@ export function DPP() {
       setFormData({
         productId: '',
         productName: '',
+        batchId: '',
+        originCountry: '',
+        manufactureDate: '',
+        expiryDate: '',
         manufacturerId: '',
         manufacturerName: '',
         certifications: [],
@@ -129,21 +140,35 @@ export function DPP() {
 
   const handleViewDetails = async (dppId) => {
     try {
+      if (!dppId) {
+        setError('DPP ID not found');
+        return;
+      }
+      console.log('Viewing DPP:', dppId);
       const response = await api.get(`/dpp/${dppId}`);
-      setSelectedDPP(response.data.data);
+      console.log('DPP response:', response.data);
+      setSelectedDPP(response.data.dpp || response.data.data);
       setShowDetailModal(true);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch DPP details');
+      console.error('View DPP error:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to fetch DPP details');
     }
   };
 
   const handleVerifyDPP = async (dppId) => {
     try {
+      if (!dppId) {
+        setError('DPP ID not found');
+        return;
+      }
+      console.log('Verifying DPP:', dppId);
       const response = await api.get(`/dpp/${dppId}/verify`);
+      console.log('Verify response:', response.data);
       setSuccess('DPP verified successfully');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to verify DPP');
+      console.error('Verify DPP error:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to verify DPP');
     }
   };
 
@@ -160,6 +185,10 @@ export function DPP() {
                 setFormData({
                   productId: '',
                   productName: '',
+                  batchId: '',
+                  originCountry: '',
+                  manufactureDate: '',
+                  expiryDate: '',
                   manufacturerId: '',
                   manufacturerName: '',
                   certifications: [],
@@ -186,7 +215,7 @@ export function DPP() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Product
+                      Product *
                     </label>
                     <select
                       name="productId"
@@ -205,7 +234,17 @@ export function DPP() {
                   </div>
 
                   <Input
-                    label="Manufacturer Name"
+                    label="Batch ID *"
+                    type="text"
+                    name="batchId"
+                    value={formData.batchId}
+                    onChange={handleChange}
+                    required
+                    placeholder="BATCH-2024-001"
+                  />
+
+                  <Input
+                    label="Manufacturer Name *"
                     type="text"
                     name="manufacturerName"
                     value={formData.manufacturerName}
@@ -213,16 +252,44 @@ export function DPP() {
                     required
                     placeholder="Manufacturer Name"
                   />
-                </div>
 
-                <Input
-                  label="Manufacturer ID"
-                  type="text"
-                  name="manufacturerId"
-                  value={formData.manufacturerId}
-                  onChange={handleChange}
-                  placeholder="MFG-001"
-                />
+                  <Input
+                    label="Manufacturer ID"
+                    type="text"
+                    name="manufacturerId"
+                    value={formData.manufacturerId}
+                    onChange={handleChange}
+                    placeholder="MFG-001"
+                  />
+
+                  <Input
+                    label="Origin Country *"
+                    type="text"
+                    name="originCountry"
+                    value={formData.originCountry}
+                    onChange={handleChange}
+                    required
+                    placeholder="Germany"
+                  />
+
+                  <Input
+                    label="Manufacture Date *"
+                    type="date"
+                    name="manufactureDate"
+                    value={formData.manufactureDate}
+                    onChange={handleChange}
+                    required
+                  />
+
+                  <Input
+                    label="Expiry Date *"
+                    type="date"
+                    name="expiryDate"
+                    value={formData.expiryDate}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Certifications</h3>
@@ -345,33 +412,43 @@ export function DPP() {
                   <tbody>
                     {dpps.map((dpp) => (
                       <tr key={dpp._id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 text-gray-900">{dpp.productName}</td>
-                        <td className="py-3 px-4 text-gray-600 font-mono">{dpp.productId}</td>
-                        <td className="py-3 px-4 text-gray-600">{dpp.manufacturerName}</td>
+                        <td className="py-3 px-4 text-gray-900">{dpp.productName || 'N/A'}</td>
+                        <td className="py-3 px-4 text-gray-600 font-mono">{dpp.productId || 'N/A'}</td>
+                        <td className="py-3 px-4 text-gray-600">{dpp.manufacturerName || 'N/A'}</td>
                         <td className="py-3 px-4">
                           <div className="flex flex-wrap gap-1">
-                            {dpp.certifications?.map((cert, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm"
-                              >
-                                {cert}
-                              </span>
-                            ))}
+                            {dpp.certifications && dpp.certifications.length > 0 ? (
+                              dpp.certifications.map((cert, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm"
+                                >
+                                  {cert}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-gray-500 text-sm">No certifications</span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4 space-x-2">
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => handleViewDetails(dpp._id)}
+                            onClick={() => {
+                              console.log('DPP object:', dpp);
+                              handleViewDetails(dpp._id);
+                            }}
                           >
                             View
                           </Button>
                           <Button
                             variant="primary"
                             size="sm"
-                            onClick={() => handleVerifyDPP(dpp._id)}
+                            onClick={() => {
+                              console.log('DPP object:', dpp);
+                              handleVerifyDPP(dpp._id);
+                            }}
                           >
                             Verify
                           </Button>

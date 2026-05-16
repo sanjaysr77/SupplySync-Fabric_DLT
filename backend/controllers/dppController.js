@@ -2,165 +2,132 @@
 
 const { withChaincodeContract } = require('../utils/fabricContract');
 const { parseFabricBuffer } = require('../utils/fabricPayload');
+const DPPData = require('../models/DPPData');
 
 exports.createDPP = async (req, res) => {
   try {
-    if (req.org !== 'producer') {
-      return res.status(403).json({
-        success: false,
-        message: 'Only producer org users can create DPP records on-chain',
-      });
-    }
     const {
-      dppId,
       batchId,
       productId,
       originCountry,
       manufactureDate,
       expiryDate,
-      certificationRef,
-      complianceStandard,
-      metadata,
       productName,
       manufacturerId,
+      manufacturerName,
       certifications,
     } = req.body;
 
-    const id =
-      dppId ||
-      (productId && batchId ? `${String(productId)}-${String(batchId)}` : null);
-    if (!id || !batchId || !productId || !originCountry || !manufactureDate || !expiryDate) {
+    if (!batchId || !productId || !originCountry || !manufactureDate || !expiryDate) {
       return res.status(400).json({
         success: false,
-        message:
-          'batchId, productId, originCountry, manufactureDate, expiryDate (YYYY-MM-DD) are required; provide dppId or unique productId+batchId pair',
+        message: 'batchId, productId, originCountry, manufactureDate, expiryDate are required',
       });
     }
-    const certRef =
-      certificationRef ||
-      (Array.isArray(certifications) ? certifications.filter(Boolean).join(', ') : '') ||
-      'UNKNOWN';
-    const standard =
-      complianceStandard && String(complianceStandard).toUpperCase().includes('EU')
-        ? String(complianceStandard)
-        : 'EU-DPP-DEFAULT';
-    const metaObj = {
-      ...(metadata && typeof metadata === 'object' ? metadata : {}),
-    };
-    if (productName) {
-      metaObj.productName = productName;
+
+    // Get product SKU if productId is MongoDB ObjectId
+    let actualProductId = productId;
+    if (productId && productId.length === 24 && /^[0-9a-f]{24}$/.test(productId)) {
+      const Product = require('../models/Product');
+      const product = await Product.findById(productId);
+      if (product) {
+        actualProductId = product.sku;
+      }
     }
-    if (manufacturerId) {
-      metaObj.manufacturerId = manufacturerId;
-    }
-    const metadataJson = Object.keys(metaObj).length ? JSON.stringify(metaObj) : '';
-    const buf = await withChaincodeContract('producer', 'dppcontract', (contract) =>
-      contract.submitTransaction(
-        'CreateDPP',
-        String(id),
-        String(batchId),
-        String(productId),
-        String(originCountry).toUpperCase(),
-        String(manufactureDate),
-        String(expiryDate),
-        String(certRef),
-        String(standard),
-        metadataJson
-      )
-    );
-    return res.status(201).json({ success: true, dpp: parseFabricBuffer(buf) });
+
+    // Create DPP record in MongoDB only
+    const dppRecord = await DPPData.create({
+      productId: String(actualProductId),
+      productName: productName || '',
+      manufacturerId: manufacturerId || '',
+      manufacturerName: manufacturerName || '',
+      certifications: certifications || [],
+      metadata: {
+        batchId: String(batchId),
+        originCountry: String(originCountry),
+        manufactureDate: String(manufactureDate),
+        expiryDate: String(expiryDate),
+        complianceStatus: 'PENDING',
+      },
+    });
+
+    return res.status(201).json({ 
+      success: true, 
+      dpp: dppRecord,
+      message: 'DPP created successfully'
+    });
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message || 'Chaincode submit failed' });
+    return res.status(400).json({ success: false, message: err.message || 'Failed to create DPP' });
   }
 };
 
 exports.getDPP = async (req, res) => {
   try {
     const dppId = req.params.id;
-    const slug = req.org || 'producer';
-    const buf = await withChaincodeContract(slug, 'dppcontract', (contract) =>
-      contract.evaluateTransaction('GetDPP', String(dppId))
-    );
+
+    const dpp = await DPPData.findById(dppId);
+    if (!dpp) {
+      return res.status(404).json({ success: false, message: 'DPP not found' });
+    }
+
     return res.json({
       success: true,
-      dppId,
-      note: 'Ledger key is dppId (not Mongo product _id)',
-      dpp: parseFabricBuffer(buf),
+      dpp,
     });
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message || 'Chaincode query failed' });
-  }
-};
-
-exports.updateDPP = async (req, res) => {
-  try {
-    const dppId = req.params.id;
-    const { transferTo, toOrgMSP, validateEu } = req.body || {};
-    const target = transferTo || toOrgMSP;
-
-    if (validateEu) {
-      const slug = req.org || 'producer';
-      const buf = await withChaincodeContract(slug, 'dppcontract', (contract) =>
-        contract.submitTransaction('ValidateForEU', String(dppId))
-      );
-      return res.json({ success: true, dpp: parseFabricBuffer(buf) });
-    }
-
-    if (!target) {
-      return res.status(400).json({
-        success: false,
-        message: 'Provide transferTo (or toOrgMSP) as DistributorMSP|RetailerMSP, or validateEu: true',
-      });
-    }
-    const slug = req.org || 'producer';
-    const buf = await withChaincodeContract(slug, 'dppcontract', (contract) =>
-      contract.submitTransaction('TransferDPP', String(dppId), String(target))
-    );
-    return res.json({ success: true, dpp: parseFabricBuffer(buf) });
-  } catch (err) {
-    return res.status(400).json({ success: false, message: err.message || 'Chaincode submit failed' });
+    return res.status(400).json({ success: false, message: err.message || 'Failed to fetch DPP' });
   }
 };
 
 exports.listDPPs = async (req, res) => {
   try {
-    const slug = req.org || 'producer';
-    const buf = await withChaincodeContract(slug, 'dppcontract', (contract) =>
-      contract.evaluateTransaction('GetAllDPP')
-    );
-    let list = parseFabricBuffer(buf);
-    if (!Array.isArray(list)) {
-      list = [];
-    }
-    const { manufacturerId } = req.params;
-    if (manufacturerId && manufacturerId !== 'all') {
-      list = list.filter(
-        (row) =>
-          row &&
-          (String(row.productId) === String(manufacturerId) ||
-            String(row.producerOrg || '').includes(manufacturerId) ||
-            (row.metadataJson && String(row.metadataJson).includes(manufacturerId)))
-      );
-    }
-    return res.json({ success: true, count: list.length, dpps: list });
+    const dpps = await DPPData.find().sort({ createdAt: -1 });
+    return res.json({ success: true, count: dpps.length, dpps });
   } catch (err) {
-    return res.status(400).json({ success: false, message: err.message || 'Chaincode query failed' });
+    return res.status(400).json({ success: false, message: err.message || 'Failed to fetch DPPs' });
   }
 };
 
 exports.verifyDPP = async (req, res) => {
   try {
     const dppId = req.params.id;
-    const slug = req.org || 'producer';
-    const buf = await withChaincodeContract(slug, 'dppcontract', (contract) =>
-      contract.submitTransaction('ValidateForEU', String(dppId))
+
+    const dpp = await DPPData.findByIdAndUpdate(
+      dppId,
+      { 'metadata.complianceStatus': 'VERIFIED' },
+      { new: true }
     );
+
+    if (!dpp) {
+      return res.status(404).json({ success: false, message: 'DPP not found' });
+    }
+
     return res.json({
       success: true,
       verified: true,
-      dpp: parseFabricBuffer(buf),
+      dpp,
     });
   } catch (err) {
     return res.status(400).json({ success: false, message: err.message || 'Verification failed' });
+  }
+};
+
+exports.updateDPP = async (req, res) => {
+  try {
+    const dppId = req.params.id;
+    const updates = req.body;
+
+    const dpp = await DPPData.findByIdAndUpdate(dppId, updates, { new: true });
+
+    if (!dpp) {
+      return res.status(404).json({ success: false, message: 'DPP not found' });
+    }
+
+    return res.json({
+      success: true,
+      dpp,
+    });
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message || 'Failed to update DPP' });
   }
 };
