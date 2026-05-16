@@ -272,14 +272,24 @@ export function Shipments() {
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          {shipment.status !== 'DELIVERED' && user?.organization?.domain?.includes('retailer') && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => handleMarkDelivered(shipment.shipmentId)}
-                            >
-                              Mark Delivered
-                            </Button>
+                          {user?.organization?.domain?.includes('retailer') && (
+                            (shipment.status && shipment.status.startsWith && shipment.status.startsWith('DELIVERED')) ? (
+                              <Button variant="secondary" size="sm" disabled>
+                                {shipment.status === 'DELIVERED_ON_TIME'
+                                  ? 'Delivered (On time)'
+                                  : shipment.status === 'DELIVERED_LATE'
+                                  ? 'Delivered (Late)'
+                                  : 'Delivered'}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleMarkDelivered(shipment.shipmentId)}
+                              >
+                                Mark Delivered
+                              </Button>
+                            )
                           )}
                         </td>
                       </tr>
