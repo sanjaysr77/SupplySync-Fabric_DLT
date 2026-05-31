@@ -12,10 +12,12 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http:/
   .map((s) => s.trim())
   .filter(Boolean);
 
+const allowAllOrigins = allowedOrigins.includes('*');
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowAllOrigins || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(new Error(`CORS: origin '${origin}' not allowed`));

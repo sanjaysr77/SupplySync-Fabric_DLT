@@ -17,6 +17,7 @@ const app = require('./app');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const PORT = Number(process.env.PORT) || 5000;
+const HOST = process.env.HOST || '0.0.0.0';
 const MONGO_URI =
   process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hyperledger-fabric-trial';
 
@@ -24,8 +25,8 @@ mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');
-    app.listen(PORT, () => {
-      console.log(`Backend running on port ${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`Backend running at http://${HOST}:${PORT}`);
     });
   })
   .catch((err) => {
